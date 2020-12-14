@@ -1,0 +1,522 @@
+-- The PluginInfo header contains some important information that Q-Sys Designer will parse when compiled.
+-- Id is a unique ID given to every plugin. While we typically use randomly generated UUID's, you can use anything here so long as it is unique
+--
+
+PluginInfo = {
+    Name = "IDK~NJR-CTB (0.0.0.0-master)", -- The tilde here indicates folder structure in the Shematic Elements pane
+    Version = "0.0.0.0-master",
+    Id = "qsysc.idk.matrix.0.0.0.0-master", -- show this is just a unique id. Show some commented out 'fun' unique ids
+    Description = "Control for IDK IP-NINJAR Management and Control Box (NJR-CTB)",
+    ShowDebug = true,
+    Author = "Solo Works London"
+}
+
+-- Once you've drawn your plugin in Designer, you can determine what colors you use a lot. Save yourself some time by putting them in a table, and then simply calling them later.
+local Colors = {
+    idk_red = {232, 12, 28},
+    White = {255, 255, 255},
+    Black = {0, 0, 0},
+    Red = {255, 0, 0},
+    Green = {0, 255, 0}
+}
+
+function GetColor(props)
+    return Colors.idk_red
+end
+
+input_count = 512
+output_count = 512
+-- We can let users determine some of the plugin properties by exposing them here
+-- While this function can be very useful, it is completely optional and not always needed.
+-- If no Properties are set here, only the position and fill properties of your plugin will show in the Properties pane
+function GetProperties()
+    props = {
+        {
+            Name = "IP Address",
+            Type = "string",
+            Value = "192.168.1.199"
+        },
+        {
+            Name = "Input Count",
+            Type = "integer",
+            Min = 1,
+            Max = 512,
+            Value = 1
+        },
+        {
+            Name = "Output Count",
+            Type = "integer",
+            Min = 1,
+            Max = 256,
+            Value = 1
+        },
+        {
+            Name = "Debug",
+            Type = "boolean",
+            Value = "true"
+        }
+    }
+    return props
+end
+
+-- The below function is optional (like GetProperties() is), but it can allow further customization of what users can and can't do with your plugin.
+-- Another application of this is if you have different input/output types for different models, and want those properties to be dynamic in the Properties pane
+function RectifyProperties(props)
+    return props
+end
+
+-- The below function is where you will populate the controls for your plugin.
+-- If you've written some of the Runtime code already, simply use the control names you populated in Text Controller/Control Script, and use their Properties to inform the values here
+-- ControlType can be Button, Knob, Indicator or Text
+-- ButtonType ( ControlType == Button ) can be Momentary, Toggle or Trigger
+-- IndicatorType ( ControlType == Indicator ) can be Led, Meter, Text or Status
+-- ControlUnit ( ControlType == Knob ) can be Hz, Float, Integer, Pan, Percent, Position or Seconds
+function GetControls(props)
+    ctls = {
+        -- System Pins
+        {
+            Name = "Online",
+            ControlType = "Indicator",
+            IndicatorType = "Led",
+            PinStyle = "Output",
+            Count = 1,
+            UserPin = true
+        },
+        {
+            Name = "IPAddress",
+            ControlType = "Indicator",
+            IndicatorType = "Text",
+            PinStyle = "Both",
+            Count = 1,
+            UserPin = true
+        },
+        {
+            Name = "FirmwareVersion",
+            ControlType = "Indicator",
+            IndicatorType = "Text",
+            PinStyle = "Output",
+            Count = 1,
+            UserPin = true
+        },
+        {
+            Name = "Temperature",
+            ControlType = "Knob",
+            ControlUnit = "Integer",
+            PinStyle = "Output",
+            Min = 0,
+            Max = 125,
+            Count = 1,
+            UserPin = true
+        },
+        -- Input Ports - Signal Presence
+        {
+            Name = "SourceSignal",
+            ControlType = "Indicator",
+            IndicatorType = "Led",
+            PinStyle = "Output",
+            Count = props["Input Count"].Value,
+            UserPin = true
+        }
+    }
+    for i = 1, props["Output Count"].Value do
+        table.insert(
+            ctls,
+            {
+                Name = "output_" .. i,
+                ControlType = "Text",
+                PinStyle = "Both",
+                UserPin = true
+            }
+        )
+        --[[table.insert(
+            ctls,
+            {
+                Name = "video_mute_" .. i,
+                ControlType = "Button",
+                ButtonType = "Toggle",
+                PinStyle = "Both",
+                UserPin = true
+            }
+        )]]
+        for s = 1, props["Input Count"].Value do
+            table.insert(
+                ctls,
+                {
+                    Name = "input_" .. s .. "-output_" .. i,
+                    ControlType = "Button",
+                    ButtonType = "Toggle",
+                    PinStyle = "Both",
+                    UserPin = true
+                }
+            )
+        end
+    end
+    return ctls
+end
+
+-- Variable holding Page Names for ease
+local pagenames = {"Display"}
+
+-- This function allows you to populate pages in your plugin.
+function GetPages(props)
+    pages = {}
+    table.insert(pages, {name = pagenames[1]})
+    return pages
+end
+
+-- This function allows you to layout pages in your plugin.
+function GetControlLayout(props)
+    local layout = {}
+    input_count = props["Input Count"].Value
+    output_count = props["Output Count"].Value
+    local matrix_groupbox_position = {0, 144}
+    local matrix_groupbox_size = {224, 200}
+    local btn_size = {32, 24}
+
+    matrix_groupbox_size[1] = 72 + (output_count * btn_size[1])
+    matrix_groupbox_size[2] = 88 + (input_count * btn_size[2])
+
+    graphics = {
+        {
+            Type = "GroupBox", -- This is the overall groupbox that will give the plugin a more 'contained' look
+            Text = "Info",
+            HTextAlign = "Left",
+            Fill = Colors.White,
+            CornerRadius = 8,
+            StrokeColor = Colors.Black,
+            StrokeWidth = 1,
+            Position = {0, 0},
+            Size = {224, 128}
+        },
+        {
+            Type = "Text",
+            Text = "Online:",
+            Font = "Roboto",
+            FontSize = 12,
+            FontStyle = "Bold",
+            HTextAlign = "Right",
+            Color = Colors.Black,
+            Position = {0, 0},
+            Size = {3 * btn_size[1], btn_size[2]}
+        },
+        {
+            Type = "Text",
+            Text = "IP Address:",
+            Font = "Roboto",
+            FontSize = 12,
+            FontStyle = "Bold",
+            HTextAlign = "Right",
+            Color = Colors.Black,
+            Position = {0, btn_size[2]},
+            Size = {3 * btn_size[1], btn_size[2]}
+        },
+        {
+            Type = "Text",
+            Text = "Firmware:",
+            Font = "Roboto",
+            FontSize = 12,
+            FontStyle = "Bold",
+            HTextAlign = "Right",
+            Color = Colors.Black,
+            Position = {0, 2 * btn_size[2]},
+            Size = {3 * btn_size[1], btn_size[2]}
+        },
+        {
+            Type = "GroupBox",
+            Text = "Matrix",
+            HTextAlign = "Left",
+            Fill = Colors.White,
+            CornerRadius = 8,
+            StrokeColor = Colors.Black,
+            StrokeWidth = 1,
+            Position = matrix_groupbox_position,
+            Size = matrix_groupbox_size
+        },
+        {
+            Type = "Text",
+            Text = "Signal",
+            FontSize = 10,
+            Position = {matrix_groupbox_position[1], (matrix_groupbox_position[2] + (2.5 * btn_size[2]))},
+            Size = btn_size
+        }
+    }
+    for i = 1, input_count do
+        table.insert(
+            graphics,
+            {
+                Type = "Text",
+                Text = "In" .. i,
+                Position = {
+                    (matrix_groupbox_position[1] + btn_size[1]),
+                    (matrix_groupbox_position[2] + (2.5 * btn_size[2])) + (i * btn_size[2])
+                },
+                Size = btn_size
+            }
+        )
+    end
+    for i = 1, output_count do
+        table.insert(
+            graphics,
+            {
+                Type = "Text",
+                Text = "Out\r" .. i,
+                Position = {btn_size[1] + (i * btn_size[1]), (matrix_groupbox_position[2] + (1.5 * btn_size[2]))},
+                Size = btn_size
+            }
+        )
+    end
+    -- System
+    layout["Online"] = {
+        PrettyName = "System~Online",
+        Style = "Indicator",
+        Color = {0, 255, 0},
+        Position = {3 * btn_size[1], 0},
+        Size = {btn_size[2], btn_size[2]}
+    }
+    layout["IPAddress"] = {
+        PrettyName = "System~IP Address",
+        Style = "TextBox",
+        Position = {3 * btn_size[1], btn_size[2]},
+        Size = {3 * btn_size[1], btn_size[2]}
+    }
+    layout["FirmwareVersion"] = {
+        PrettyName = "System~Firmware Version",
+        Style = "Text",
+        Position = {3 * btn_size[1], 2 * btn_size[2]},
+        Size = {3 * btn_size[1], btn_size[2]}
+    }
+    -- Matrix crosspoints
+    for i = 1, output_count do -- For each output
+        layout["output_" .. i] = {
+            PrettyName = "Output " .. i .. "~Select",
+            Style = "Indicator",
+            Color = {255, 255, 255},
+            Position = {btn_size[1] + (i * btn_size[1]), matrix_groupbox_position[2] + (2.5 * btn_size[2])},
+            Size = btn_size
+        }
+        --[[layout["video_mute_" .. i] = {
+            PrettyName = "Video Mute~Video Mute " .. i,
+            Style = "Button",
+            Legend = "Mute",
+            Color = {255, 0, 0},
+            Position = {btn_size[1] + (i * btn_size[1]), matrix_groupbox_position[2] + (0.5 * btn_size[2])},
+            Size = btn_size
+        }]]
+        for s = 1, input_count do -- For each input
+            layout["input_" .. s .. "-output_" .. i] = {
+                PrettyName = "Output " .. i .. "~In" .. s .. " -> Out" .. i,
+                Style = "Button",
+                Legend = tostring(s),
+                Position = {btn_size[1] + (i * btn_size[1]), 192 + (0.5 * btn_size[2]) + (s * btn_size[2])},
+                Size = btn_size
+            }
+        end
+    end
+    if input_count == 1 then
+        layout["SourceSignal"] = {
+            PrettyName = "Signal Presence~Source 1",
+            Style = "Indicator",
+            Color = {0, 255, 0},
+            Position = {(matrix_groupbox_position[1] + 4), 192 + (1.5 * btn_size[2])},
+            Size = {24, 24}
+        }
+    else
+        for i = 1, input_count do
+            layout["SourceSignal " .. i] = {
+                PrettyName = string.format("Signal Presence~Source %02i", i),
+                Style = "Indicator",
+                Color = {0, 255, 0},
+                Position = {(matrix_groupbox_position[1] + 4), 192 + ((i + 0.5) * btn_size[2])},
+                Size = {24, 24}
+            }
+        end
+    end
+    return layout, graphics
+end
+
+function matrix_feedback(inp, outp)
+    Controls["output_" .. outp].String = inp
+    for i = 1, input_count do
+        Controls["input_" .. i .. "-output_" .. outp].Boolean = false
+    end
+    if inp ~= "0" then
+        Controls["input_" .. inp .. "-output_" .. outp].Boolean = true
+    end
+end
+
+function tie_command(inp, outp)
+    fnSend("SSW,0,0,1," .. inp .. "," .. outp)
+end
+
+if Controls then
+    input_count = Properties["Input Count"].Value
+    output_count = Properties["Output Count"].Value
+    -- Local Structure for holding State
+    idk = {
+        Host = "",
+        Port = 1100,
+        Rx = ""
+    }
+
+    -- Easy Debug Out
+    function debug(s)
+        if Properties["Debug"].Value == true then
+            print(s)
+        end
+    end
+    -- Build TCP Client
+    conn = TcpSocket.New()
+    conn.ReadTimeout = 0
+    conn.WriteTimeout = 0
+    conn.ReconnectTimeout = 5
+
+    -- Create and setup the Communications Timeout
+    timerComms = Timer.New()
+    timerComms.EventHandler = function(timer)
+        timer:Stop()
+        Controls.Online.Boolean = false
+        debug("Connection Timed Out")
+        conn:Disconnect()
+        fnConnect()
+    end
+
+    -- Create and setup Polling
+    timerPoll = Timer.New()
+
+    timerPoll.EventHandler = function(timer)
+        fnPoll()
+    end
+
+    function fnInitPoll(activate)
+        timerPoll:Stop()
+        if activate == true then
+            timerPoll:Start(20)
+        end
+    end
+
+    function fnPoll()
+        -- Poll the Info
+        fnSend()
+    end
+
+    -- Data Sending Helper Function
+    function fnSend(cmd)
+        -- Send to device
+        debug("-->idk::" .. cmd)
+        conn:Write("@" .. cmd .. "/r")
+        -- Reset Polling
+        fnInitPoll(true)
+    end
+
+    function fnInit()
+        for i=1, input_count do
+            fnSend("GSS,1,".. i ..",1,1")
+        end
+    end
+
+    -- Setup Utility Callbacks as required
+    conn.Connected = function(conn)
+        debug("TCP socket is Connected")
+        -- Set a timer to wait for connection to establish
+        Timer.CallAfter(fnInit, 1)
+    end
+    conn.Reconnect = function(conn)
+        debug("TCP socket is Reconnecting")
+    end
+    conn.Closed = function(conn)
+        debug("TCP socket was closed by the remote end")
+        fnInitPoll(false)
+    end
+    conn.Error = function(conn, err)
+        debug("TCP socket had an error ::")
+        debug(err)
+    end
+    conn.Timeout = function(conn, err)
+        debug("TCP socket had an timeout ::")
+        debug(err)
+    end
+
+    -- Helper Function - Open TCP Connection
+    function fnConnect()
+        -- Open Connection
+        conn:Connect(idk.Host, idk.Port)
+        debug("TCP socket is Connecting")
+        -- Set IP address value
+        if Controls.IPAddress then
+            Controls.IPAddress.String = idk.Host .. ":" .. idk.Port
+        end
+    end
+    local function split(str, delim)
+        local result = {}
+        for part in str:gmatch("[^" .. delim .. "]+") do
+            result[#result + 1] = part
+        end
+        return result
+    end
+    -- Setup Data Callbacks as required
+    conn.Data = function(conn)
+        -- Read out lines from the buffer
+        line = conn:ReadLine(TcpSocket.EOL.Any)
+        while (line ~= nil) do
+            -- Print Line
+            debug(line)
+            if line:sub(1, 4) == "@ERR" then
+                local err = string.match(line, "@ERR,(%d+)")
+                if err == "1" then
+                    debug("Error 1: Erroneous parameter format or value")
+                elseif err == "2" then
+                    debug("Error 2: Undefined command or wrong format")
+                elseif err == "3" then
+                    debug("Error 3: Currently cannot be used")
+                else
+                    debug("Error 99: Unknown error")
+                end
+            elseif line:sub(1, 5) == "@GIVC" then
+                Controls.FirmwareVersion.String = line:sub(21, -1)
+            elseif line:sub(3, 5) == "SW," then
+                local inp, outp = string.match(line:sub(3, -1), "SW,0,0,1,(%d+),(%d+)") -- this really really needs to be tested
+                if outp == 0 then
+                    for i = 1, output_count do
+                        matrix_feedback(inp, i)
+                    end
+                else
+                    matrix_feedback(inp, outp)
+                end
+            elseif line:sub(1, 6) == "@GSS,1" then
+                local channel, target, status = string.match(line, "@GSS,1,(%d+),1,(%d+),(%w+)") -- target for potential future use
+                if target == "1" then
+                    Controls["SourceSignal"][channel].Boolean = status ~= "N"
+                end
+            end
+            -- Get New Line
+            line = conn:ReadLine(TcpSocket.EOL.Any)
+        end
+    end
+    -- Set IP address from Properties if present
+    if Properties then
+        if Properties["IP Address"].Value ~= "" then
+            idk.Host = Properties["IP Address"].Value
+            fnConnect()
+        else
+            debug("IP Address Property Not Set")
+        end
+    end
+    -- Loop through all Controls and setup Event Handlers
+    for i = 1, output_count do
+        Controls["output_" .. i].EventHandler = function()
+            tie_command(Controls["output_" .. i].String, i)
+        end
+        for i = 1, output_count do
+            for p = 1, input_count do
+                Controls["input_" .. p .. "-output_" .. i].EventHandler = function()
+                    if Controls["input_" .. p .. "-output_" .. i].Boolean then
+                        Controls["output_" .. i].String = tostring(p)
+                    else
+                        Controls["output_" .. i].String = "0"
+                    end
+                    tie_command(Controls["output_" .. i].String, i)
+                end
+            end
+        end
+    end
+end
