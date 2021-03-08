@@ -40,21 +40,16 @@ function GetProperties()
             Name = "Input Count",
             Type = "integer",
             Min = 1,
-            Max = 512,
+            Max = 24,
             Value = 1
         },
         {
             Name = "Output Count",
             Type = "integer",
             Min = 1,
-            Max = 256,
+            Max = 24,
             Value = 1
         },
-        {
-            Name = "Debug",
-            Type = "boolean",
-            Value = "true"
-        }
     }
     return props
 end
@@ -95,16 +90,6 @@ function GetControls(props)
             ControlType = "Indicator",
             IndicatorType = "Text",
             PinStyle = "Output",
-            Count = 1,
-            UserPin = true
-        },
-        {
-            Name = "Temperature",
-            ControlType = "Knob",
-            ControlUnit = "Integer",
-            PinStyle = "Output",
-            Min = 0,
-            Max = 125,
             Count = 1,
             UserPin = true
         },
@@ -167,26 +152,40 @@ end
 -- This function allows you to layout pages in your plugin.
 function GetControlLayout(props)
     local layout = {}
+
     input_count = props["Input Count"].Value
     output_count = props["Output Count"].Value
-    local matrix_groupbox_position = {0, 144}
-    local matrix_groupbox_size = {224, 200}
-    local btn_size = {32, 24}
 
-    matrix_groupbox_size[1] = 72 + (output_count * btn_size[1])
-    matrix_groupbox_size[2] = 88 + (input_count * btn_size[2])
+    local title_size = {224, 32}
+    local btn_size = {32, 24}
+    local status_groupbox_size = {title_size[1], 4 * btn_size[2]}
+    local matrix_groupbox_position = {0, title_size[2] + status_groupbox_size[2] + (0.5 * btn_size[2])}
+    local matrix_groupbox_size = {
+        (2.5 * btn_size[1]) + (output_count * btn_size[1]),
+        (4 * btn_size[2]) + (input_count * btn_size[2])
+    }
 
     graphics = {
         {
+            Type = "Header",
+            Text = "IDK Ninjar",
+            HTextAlign = "Center",
+            Color = Colors.idk_red,
+            FontSize = 16,
+            Position = {0, 0},
+            Size = title_size
+        },
+        {
             Type = "GroupBox", -- This is the overall groupbox that will give the plugin a more 'contained' look
-            Text = "Info",
+            Text = "Status",
             HTextAlign = "Left",
             Fill = Colors.White,
             CornerRadius = 8,
-            StrokeColor = Colors.Black,
+            StrokeColor = Colors.idk_red,
+            Color = Colors.idk_red,
             StrokeWidth = 1,
-            Position = {0, 0},
-            Size = {224, 128}
+            Position = {0, title_size[2]},
+            Size = status_groupbox_size
         },
         {
             Type = "Text",
@@ -196,7 +195,7 @@ function GetControlLayout(props)
             FontStyle = "Bold",
             HTextAlign = "Right",
             Color = Colors.Black,
-            Position = {0, 0},
+            Position = {0, title_size[2] + (0.5 * btn_size[2])},
             Size = {3 * btn_size[1], btn_size[2]}
         },
         {
@@ -207,7 +206,7 @@ function GetControlLayout(props)
             FontStyle = "Bold",
             HTextAlign = "Right",
             Color = Colors.Black,
-            Position = {0, btn_size[2]},
+            Position = {0, title_size[2] + (1.5 * btn_size[2])},
             Size = {3 * btn_size[1], btn_size[2]}
         },
         {
@@ -218,7 +217,7 @@ function GetControlLayout(props)
             FontStyle = "Bold",
             HTextAlign = "Right",
             Color = Colors.Black,
-            Position = {0, 2 * btn_size[2]},
+            Position = {0, title_size[2] + (2.5 * btn_size[2])},
             Size = {3 * btn_size[1], btn_size[2]}
         },
         {
@@ -227,7 +226,8 @@ function GetControlLayout(props)
             HTextAlign = "Left",
             Fill = Colors.White,
             CornerRadius = 8,
-            StrokeColor = Colors.Black,
+            StrokeColor = Colors.idk_red,
+            Color = Colors.idk_red,
             StrokeWidth = 1,
             Position = matrix_groupbox_position,
             Size = matrix_groupbox_size
@@ -270,19 +270,19 @@ function GetControlLayout(props)
         PrettyName = "System~Online",
         Style = "Indicator",
         Color = {0, 255, 0},
-        Position = {3 * btn_size[1], 0},
+        Position = {3 * btn_size[1], title_size[2] + (0.5 * btn_size[2])},
         Size = {btn_size[2], btn_size[2]}
     }
     layout["IPAddress"] = {
         PrettyName = "System~IP Address",
         Style = "TextBox",
-        Position = {3 * btn_size[1], btn_size[2]},
+        Position = {3 * btn_size[1], title_size[2] + (1.5 * btn_size[2])},
         Size = {3 * btn_size[1], btn_size[2]}
     }
     layout["FirmwareVersion"] = {
         PrettyName = "System~Firmware Version",
         Style = "Text",
-        Position = {3 * btn_size[1], 2 * btn_size[2]},
+        Position = {3 * btn_size[1], title_size[2] + (2.5 * btn_size[2])},
         Size = {3 * btn_size[1], btn_size[2]}
     }
     -- Matrix crosspoints
@@ -307,7 +307,10 @@ function GetControlLayout(props)
                 PrettyName = "Output " .. i .. "~In" .. s .. " -> Out" .. i,
                 Style = "Button",
                 Legend = tostring(s),
-                Position = {btn_size[1] + (i * btn_size[1]), 192 + (0.5 * btn_size[2]) + (s * btn_size[2])},
+                Position = {
+                    btn_size[1] + (i * btn_size[1]),
+                    matrix_groupbox_position[2] + (2.5 * btn_size[2]) + (s * btn_size[2])
+                },
                 Size = btn_size
             }
         end
@@ -317,7 +320,7 @@ function GetControlLayout(props)
             PrettyName = "Signal Presence~Source 1",
             Style = "Indicator",
             Color = {0, 255, 0},
-            Position = {(matrix_groupbox_position[1] + 4), 192 + (1.5 * btn_size[2])},
+            Position = {(matrix_groupbox_position[1] + 4), matrix_groupbox_position[2] + (3.5 * btn_size[2])},
             Size = {24, 24}
         }
     else
@@ -326,7 +329,7 @@ function GetControlLayout(props)
                 PrettyName = string.format("Signal Presence~Source %02i", i),
                 Style = "Indicator",
                 Color = {0, 255, 0},
-                Position = {(matrix_groupbox_position[1] + 4), 192 + ((i + 0.5) * btn_size[2])},
+                Position = {(matrix_groupbox_position[1] + 4), matrix_groupbox_position[2] + ((i + 2.5) * btn_size[2])},
                 Size = {24, 24}
             }
         end
@@ -358,12 +361,6 @@ if Controls then
         Rx = ""
     }
 
-    -- Easy Debug Out
-    function debug(s)
-        if Properties["Debug"].Value == true then
-            print(s)
-        end
-    end
     -- Build TCP Client
     conn = TcpSocket.New()
     conn.ReadTimeout = 0
@@ -375,7 +372,7 @@ if Controls then
     timerComms.EventHandler = function(timer)
         timer:Stop()
         Controls.Online.Boolean = false
-        debug("Connection Timed Out")
+        print("Connection Timed Out")
         conn:Disconnect()
         fnConnect()
     end
@@ -402,45 +399,45 @@ if Controls then
     -- Data Sending Helper Function
     function fnSend(cmd)
         -- Send to device
-        debug("-->idk::" .. cmd)
+        print("-->idk::" .. cmd)
         conn:Write("@" .. cmd .. "/r")
         -- Reset Polling
         fnInitPoll(true)
     end
 
     function fnInit()
-        for i=1, input_count do
-            fnSend("GSS,1,".. i ..",1,1")
+        for i = 1, input_count do
+            fnSend("GSS,1," .. i .. ",1,1")
         end
     end
 
     -- Setup Utility Callbacks as required
     conn.Connected = function(conn)
-        debug("TCP socket is Connected")
+        print("TCP socket is Connected")
         -- Set a timer to wait for connection to establish
         Timer.CallAfter(fnInit, 1)
     end
     conn.Reconnect = function(conn)
-        debug("TCP socket is Reconnecting")
+        print("TCP socket is Reconnecting")
     end
     conn.Closed = function(conn)
-        debug("TCP socket was closed by the remote end")
+        print("TCP socket was closed by the remote end")
         fnInitPoll(false)
     end
     conn.Error = function(conn, err)
-        debug("TCP socket had an error ::")
-        debug(err)
+        print("TCP socket had an error ::")
+        print(err)
     end
     conn.Timeout = function(conn, err)
-        debug("TCP socket had an timeout ::")
-        debug(err)
+        print("TCP socket had an timeout ::")
+        print(err)
     end
 
     -- Helper Function - Open TCP Connection
     function fnConnect()
         -- Open Connection
         conn:Connect(idk.Host, idk.Port)
-        debug("TCP socket is Connecting")
+        print("TCP socket is Connecting")
         -- Set IP address value
         if Controls.IPAddress then
             Controls.IPAddress.String = idk.Host .. ":" .. idk.Port
@@ -459,17 +456,17 @@ if Controls then
         line = conn:ReadLine(TcpSocket.EOL.Any)
         while (line ~= nil) do
             -- Print Line
-            debug(line)
+            print(line)
             if line:sub(1, 4) == "@ERR" then
                 local err = string.match(line, "@ERR,(%d+)")
                 if err == "1" then
-                    debug("Error 1: Erroneous parameter format or value")
+                    print("Error 1: Erroneous parameter format or value")
                 elseif err == "2" then
-                    debug("Error 2: Undefined command or wrong format")
+                    print("Error 2: Undefined command or wrong format")
                 elseif err == "3" then
-                    debug("Error 3: Currently cannot be used")
+                    print("Error 3: Currently cannot be used")
                 else
-                    debug("Error 99: Unknown error")
+                    print("Error 99: Unknown error")
                 end
             elseif line:sub(1, 5) == "@GIVC" then
                 Controls.FirmwareVersion.String = line:sub(21, -1)
@@ -498,7 +495,7 @@ if Controls then
             idk.Host = Properties["IP Address"].Value
             fnConnect()
         else
-            debug("IP Address Property Not Set")
+            print("IP Address Property Not Set")
         end
     end
     -- Loop through all Controls and setup Event Handlers
