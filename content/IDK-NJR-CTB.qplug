@@ -41,15 +41,15 @@ function GetProperties()
             Type = "integer",
             Min = 1,
             Max = 24,
-            Value = 1
+            Value = 2
         },
         {
             Name = "Output Count",
             Type = "integer",
             Min = 1,
             Max = 24,
-            Value = 1
-        },
+            Value = 2
+        }
     }
     return props
 end
@@ -93,15 +93,6 @@ function GetControls(props)
             Count = 1,
             UserPin = true
         },
-        -- Input Ports - Signal Presence
-        {
-            Name = "SourceSignal",
-            ControlType = "Indicator",
-            IndicatorType = "Led",
-            PinStyle = "Output",
-            Count = props["Input Count"].Value,
-            UserPin = true
-        }
     }
     for i = 1, props["Output Count"].Value do
         table.insert(
@@ -131,6 +122,16 @@ function GetControls(props)
                     ControlType = "Button",
                     ButtonType = "Toggle",
                     PinStyle = "Both",
+                    UserPin = true
+                }
+            )
+            table.insert(
+                ctls,
+                {
+                    Name = "source_signal_" .. i,
+                    ControlType = "Indicator",
+                    IndicatorType = "Led",
+                    PinStyle = "Output",
                     UserPin = true
                 }
             )
@@ -315,40 +316,16 @@ function GetControlLayout(props)
             }
         end
     end
-    if input_count == 1 then
-        layout["SourceSignal"] = {
-            PrettyName = "Signal Presence~Source 1",
+    for i = 1, input_count do
+        layout["source_signal_" .. i] = {
+            PrettyName = string.format("Signal Presence~Source %02i", i),
             Style = "Indicator",
             Color = {0, 255, 0},
-            Position = {(matrix_groupbox_position[1] + 4), matrix_groupbox_position[2] + (3.5 * btn_size[2])},
+            Position = {(matrix_groupbox_position[1] + 4), matrix_groupbox_position[2] + ((i + 2.5) * btn_size[2])},
             Size = {24, 24}
         }
-    else
-        for i = 1, input_count do
-            layout["SourceSignal " .. i] = {
-                PrettyName = string.format("Signal Presence~Source %02i", i),
-                Style = "Indicator",
-                Color = {0, 255, 0},
-                Position = {(matrix_groupbox_position[1] + 4), matrix_groupbox_position[2] + ((i + 2.5) * btn_size[2])},
-                Size = {24, 24}
-            }
-        end
     end
     return layout, graphics
-end
-
-function matrix_feedback(inp, outp)
-    Controls["output_" .. outp].String = inp
-    for i = 1, input_count do
-        Controls["input_" .. i .. "-output_" .. outp].Boolean = false
-    end
-    if inp ~= "0" then
-        Controls["input_" .. inp .. "-output_" .. outp].Boolean = true
-    end
-end
-
-function tie_command(inp, outp)
-    fnSend("SSW,0,0,1," .. inp .. "," .. outp)
 end
 
 if Controls then
@@ -393,14 +370,17 @@ if Controls then
 
     function fnPoll()
         -- Poll the Info
-        fnSend()
+        for i = 1, input_count do
+            fnSend("GSS,1," .. i .. ",1,1")
+        end
     end
 
     -- Data Sending Helper Function
     function fnSend(cmd)
         -- Send to device
-        print("-->idk::" .. cmd)
-        conn:Write("@" .. cmd .. "/r")
+        local command = "@" .. cmd .. "\r\n"
+        print("-->idk::" .. command)
+        conn:Write(command)
         -- Reset Polling
         fnInitPoll(true)
     end
@@ -411,11 +391,30 @@ if Controls then
         end
     end
 
+    function matrix_feedback(inp, outp)
+        Controls["output_" .. outp].String = inp
+        for i = 1, input_count do
+            Controls["input_" .. i .. "-output_" .. outp].Boolean = false
+        end
+        if inp ~= "0" then
+            Controls["input_" .. inp .. "-output_" .. outp].Boolean = true
+        end
+    end
+    
+    function tie_command(inp, outp)
+        fnSend("SSW,0,0,1," .. inp .. "," .. outp)
+    end
+
     -- Setup Utility Callbacks as required
     conn.Connected = function(conn)
         print("TCP socket is Connected")
         -- Set a timer to wait for connection to establish
         Timer.CallAfter(fnInit, 1)
+        Controls["Online"].Boolean = true
+        fnSend("GIVC,0,0,1")
+        for i=1, output_count do
+            fnSend("GSW,0,0,1,"..i)
+        end
     end
     conn.Reconnect = function(conn)
         print("TCP socket is Reconnecting")
@@ -454,6 +453,7 @@ if Controls then
     conn.Data = function(conn)
         -- Read out lines from the buffer
         line = conn:ReadLine(TcpSocket.EOL.Any)
+        print("line: " .. line)
         while (line ~= nil) do
             -- Print Line
             print(line)
@@ -470,8 +470,9 @@ if Controls then
                 end
             elseif line:sub(1, 5) == "@GIVC" then
                 Controls.FirmwareVersion.String = line:sub(21, -1)
-            elseif line:sub(3, 5) == "SW," then
-                local inp, outp = string.match(line:sub(3, -1), "SW,0,0,1,(%d+),(%d+)") -- this really really needs to be tested
+            elseif line:sub(1, 5) == "@GSVC" then
+                local outp, inp = string.match(line:sub(3, -1), "VC,0,0,1,(%d+),(%d+)")
+                print(inp, outp)
                 if outp == 0 then
                     for i = 1, output_count do
                         matrix_feedback(inp, i)
@@ -480,10 +481,27 @@ if Controls then
                     matrix_feedback(inp, outp)
                 end
             elseif line:sub(1, 6) == "@GSS,1" then
-                local channel, target, status = string.match(line, "@GSS,1,(%d+),1,(%d+),(%w+)") -- target for potential future use
-                if target == "1" then
-                    Controls["SourceSignal"][channel].Boolean = status ~= "N"
+                local channel, mode, status = string.match(line, "@GSS,1,(%d+),1,(%d+),(%w+)")
+                print(channel, mode, status)
+                if mode == "1" then
+                    Controls["source_signal_" .. channel].Boolean = status ~= "N"
                 end
+            elseif line:sub(1,11) == "@GSW,0,0,1," then
+                local inp = string.match(line, "@GSW,0,0,1,(%d+)")
+                for i=1, output_count do
+                    --for word in str:gmatch("%w+") do table.insert(words, word) end 
+                end 
+                --[[function split(str,sep)
+                if sep == nil then
+                    words = {}
+                    for word in str:gmatch("%w+") do 
+                        table.insert(words, word) 
+                    end
+                    return words
+                end
+                return {str:match((str:gsub("[^"..sep.."]*"..sep, "([^"..sep.."]*)"..sep)))} -- BUG!! doesnt return last value
+                end
+                ]]   
             end
             -- Get New Line
             line = conn:ReadLine(TcpSocket.EOL.Any)

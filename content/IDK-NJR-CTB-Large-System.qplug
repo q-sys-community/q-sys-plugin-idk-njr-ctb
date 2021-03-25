@@ -93,15 +93,6 @@ function GetControls(props)
             Count = 1,
             UserPin = true
         },
-        -- Input Ports - Signal Presence
-        {
-            Name = "SourceSignal",
-            ControlType = "Indicator",
-            IndicatorType = "Led",
-            PinStyle = "Output",
-            Count = props["Input Count"].Value,
-            UserPin = true
-        }
     }
     for i = 1, props["Output Count"].Value do
         table.insert(
@@ -123,6 +114,18 @@ function GetControls(props)
                 UserPin = true
             }
         )]]
+    end
+    for s = 1, props["Input Count"].Value do
+        table.insert(
+            ctls,
+            {
+                Name = "source_signal_" .. i,
+                ControlType = "Indicator",
+                IndicatorType = "Led",
+                PinStyle = "Output",
+                UserPin = true
+            }
+        )
     end
     return ctls
 end
@@ -225,13 +228,6 @@ function GetControlLayout(props)
             Position = {0, title_size[2] + (2.5 * btn_size[2])},
             Size = {3 * btn_size[1], btn_size[2]}
         }
-        --[[{
-            Type = "Text",
-            Text = "Signal",
-            FontSize = 10,
-            Position = {matrix_groupbox_position[1], (matrix_groupbox_position[2] + (2.5 * btn_size[2]))},
-            Size = btn_size
-        }]]
     }
 
     if current_page == "Matrix" then
@@ -315,7 +311,7 @@ function GetControlLayout(props)
                     Size = btn_size
                 }
             )
-            layout["SourceSignal " .. i] = {
+            layout["source_signal_" .. i] = {
                 PrettyName = string.format("Signal Presence~Source %02i", i),
                 Style = "Indicator",
                 Color = {0, 255, 0},
@@ -394,14 +390,19 @@ if Controls then
 
     function fnPoll()
         -- Poll the Info
-        fnSend()
+        --[[
+        for i = 1, input_count do
+            fnSend("GSS,1," .. i .. ",1,1")
+        end
+        ]]
     end
 
     -- Data Sending Helper Function
     function fnSend(cmd)
         -- Send to device
-        print("-->idk::" .. cmd)
-        conn:Write("@" .. cmd .. "/r")
+        local command = "@" .. cmd .. "\r\n"
+        print("-->idk::" .. command)
+        conn:Write(command)
         -- Reset Polling
         fnInitPoll(true)
     end
@@ -424,13 +425,16 @@ if Controls then
     conn.Connected = function(conn)
         print("TCP socket is Connected")
         -- Set a timer to wait for connection to establish
+        Controls["Online"].Boolean = true
         Timer.CallAfter(fnInit, 1)
     end
     conn.Reconnect = function(conn)
         print("TCP socket is Reconnecting")
+        Controls["Online"].Boolean = false
     end
     conn.Closed = function(conn)
         print("TCP socket was closed by the remote end")
+        Controls["Online"].Boolean = false
         fnInitPoll(false)
     end
     conn.Error = function(conn, err)
@@ -440,6 +444,7 @@ if Controls then
     conn.Timeout = function(conn, err)
         print("TCP socket had an timeout ::")
         print(err)
+        Controls["Online"].Boolean = false
     end
 
     -- Helper Function - Open TCP Connection
@@ -463,6 +468,7 @@ if Controls then
     conn.Data = function(conn)
         -- Read out lines from the buffer
         line = conn:ReadLine(TcpSocket.EOL.Any)
+        print("line: " .. line)
         while (line ~= nil) do
             -- Print Line
             print(line)
@@ -479,8 +485,9 @@ if Controls then
                 end
             elseif line:sub(1, 5) == "@GIVC" then
                 Controls.FirmwareVersion.String = line:sub(21, -1)
-            elseif line:sub(3, 5) == "SW," then
-                local inp, outp = string.match(line:sub(3, -1), "SW,0,0,1,(%d+),(%d+)") -- this really really needs to be tested
+            elseif line:sub(1, 5) == "@GSVC" then
+                local outp, inp = string.match(line:sub(3, -1), "VC,0,0,1,(%d+),(%d+)")
+                print(inp, outp)
                 if outp == 0 then
                     for i = 1, output_count do
                         matrix_feedback(inp, i)
@@ -489,10 +496,15 @@ if Controls then
                     matrix_feedback(inp, outp)
                 end
             elseif line:sub(1, 6) == "@GSS,1" then
-                local channel, target, status = string.match(line, "@GSS,1,(%d+),1,(%d+),(%w+)") -- target for potential future use
-                if target == "1" then
-                    Controls["SourceSignal"][channel].Boolean = status ~= "N"
+                local channel, mode, status = string.match(line, "@GSS,1,(%d+),1,(%d+),(%w+)")
+                print(channel, mode, status)
+                if mode == "1" then
+                    Controls["source_signal_" .. channel].Boolean = status ~= "N"
                 end
+            end
+            -- Get New Line
+            line = conn:ReadLine(TcpSocket.EOL.Any)
+        end
             end
             -- Get New Line
             line = conn:ReadLine(TcpSocket.EOL.Any)
