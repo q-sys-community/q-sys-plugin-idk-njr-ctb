@@ -9,7 +9,7 @@
     <owners>Q-Sys Community</owners>
     <license type="expression">GPL-3.0-or-later</license>
     <projectUrl>https://github.com/q-sys-community/q-sys-plugin-idk-njr-ctb</projectUrl>
-    <iconUrl>http://content/images/idk.jpeg</iconUrl>
+    <iconUrl>http://content/images/idk.jpg</iconUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Package description</description>
     <releaseNotes>Summary of changes made in this release of the package.</releaseNotes>
