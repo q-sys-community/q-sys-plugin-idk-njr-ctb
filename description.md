@@ -2,4 +2,4 @@
 
 Plugin for IDK CTB-NJR
 
-Not tested against a real device.
+Tested matrix control and metadata extraction.

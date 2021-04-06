@@ -40,14 +40,14 @@ function GetProperties()
             Name = "Input Count",
             Type = "integer",
             Min = 1,
-            Max = 24,
+            Max = 32,
             Value = 2
         },
         {
             Name = "Output Count",
             Type = "integer",
             Min = 1,
-            Max = 24,
+            Max = 32,
             Value = 2
         }
     }
@@ -92,8 +92,20 @@ function GetControls(props)
             PinStyle = "Output",
             Count = 1,
             UserPin = true
-        },
+        }
     }
+    for s = 1, props["Input Count"].Value do
+        table.insert(
+            ctls,
+            {
+                Name = "source_signal_" .. s,
+                ControlType = "Indicator",
+                IndicatorType = "Led",
+                PinStyle = "Output",
+                UserPin = true
+            }
+        )
+    end
     for i = 1, props["Output Count"].Value do
         table.insert(
             ctls,
@@ -122,16 +134,6 @@ function GetControls(props)
                     ControlType = "Button",
                     ButtonType = "Toggle",
                     PinStyle = "Both",
-                    UserPin = true
-                }
-            )
-            table.insert(
-                ctls,
-                {
-                    Name = "source_signal_" .. i,
-                    ControlType = "Indicator",
-                    IndicatorType = "Led",
-                    PinStyle = "Output",
                     UserPin = true
                 }
             )
@@ -369,7 +371,6 @@ if Controls then
     end
 
     function fnPoll()
-        -- Poll the Info
         for i = 1, input_count do
             fnSend("GSS,1," .. i .. ",1,1")
         end
@@ -400,7 +401,7 @@ if Controls then
             Controls["input_" .. inp .. "-output_" .. outp].Boolean = true
         end
     end
-    
+
     function tie_command(inp, outp)
         fnSend("SSW,0,0,1," .. inp .. "," .. outp)
     end
@@ -412,8 +413,8 @@ if Controls then
         Timer.CallAfter(fnInit, 1)
         Controls["Online"].Boolean = true
         fnSend("GIVC,0,0,1")
-        for i=1, output_count do
-            fnSend("GSW,0,0,1,"..i)
+        for i = 1, output_count do
+            fnSend("GSW,0,0,1," .. i)
         end
     end
     conn.Reconnect = function(conn)
@@ -486,22 +487,18 @@ if Controls then
                 if mode == "1" then
                     Controls["source_signal_" .. channel].Boolean = status ~= "N"
                 end
-            elseif line:sub(1,11) == "@GSW,0,0,1," then
+            elseif line:sub(1, 11) == "@GSW,0,0,1," then
                 local inp = string.match(line, "@GSW,0,0,1,(%d+)")
-                for i=1, output_count do
-                    --for word in str:gmatch("%w+") do table.insert(words, word) end 
-                end 
-                --[[function split(str,sep)
-                if sep == nil then
-                    words = {}
-                    for word in str:gmatch("%w+") do 
-                        table.insert(words, word) 
-                    end
-                    return words
+                local output_table = {}
+                for d in line:gmatch("%d+") do
+                    table.insert(output_table, d)
                 end
-                return {str:match((str:gsub("[^"..sep.."]*"..sep, "([^"..sep.."]*)"..sep)))} -- BUG!! doesnt return last value
+                for i = 1, 4 do
+                    table.remove(output_table, 1)
                 end
-                ]]   
+                for i, v in ipairs(output_table) do
+                    matrix_feedback(inp, v)
+                end
             end
             -- Get New Line
             line = conn:ReadLine(TcpSocket.EOL.Any)

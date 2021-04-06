@@ -5,7 +5,7 @@
 PluginInfo = {
     Name = "IDK~NJR-CTB [Large System] (0.0.0.0-master)", -- The tilde here indicates folder structure in the Shematic Elements pane
     Version = "0.0.0.0-master",
-    Id = "qsysc.idk.matrix.0.0.0.0-master", -- show this is just a unique id. Show some commented out 'fun' unique ids
+    Id = "qsysc.idk.matrix-large.0.0.0.0-master", -- show this is just a unique id. Show some commented out 'fun' unique ids
     Description = "Control for IDK IP-NINJAR Management and Control Box (NJR-CTB)",
     ShowDebug = true,
     Author = "Solo Works London"
@@ -92,7 +92,7 @@ function GetControls(props)
             PinStyle = "Output",
             Count = 1,
             UserPin = true
-        },
+        }
     }
     for i = 1, props["Output Count"].Value do
         table.insert(
@@ -119,7 +119,7 @@ function GetControls(props)
         table.insert(
             ctls,
             {
-                Name = "source_signal_" .. i,
+                Name = "source_signal_" .. s,
                 ControlType = "Indicator",
                 IndicatorType = "Led",
                 PinStyle = "Output",
@@ -155,7 +155,7 @@ function GetControlLayout(props)
 
     local row_size = 8
 
-    if output_count > 128 then
+    if output_count > 64 or input_count > 64 then
         row_size = 16
     end
 
@@ -389,12 +389,9 @@ if Controls then
     end
 
     function fnPoll()
-        -- Poll the Info
-        --[[
         for i = 1, input_count do
             fnSend("GSS,1," .. i .. ",1,1")
         end
-        ]]
     end
 
     -- Data Sending Helper Function
@@ -425,8 +422,12 @@ if Controls then
     conn.Connected = function(conn)
         print("TCP socket is Connected")
         -- Set a timer to wait for connection to establish
-        Controls["Online"].Boolean = true
         Timer.CallAfter(fnInit, 1)
+        Controls["Online"].Boolean = true
+        fnSend("GIVC,0,0,1")
+        for i = 1, output_count do
+            fnSend("GSW,0,0,1," .. i)
+        end
     end
     conn.Reconnect = function(conn)
         print("TCP socket is Reconnecting")
@@ -501,10 +502,18 @@ if Controls then
                 if mode == "1" then
                     Controls["source_signal_" .. channel].Boolean = status ~= "N"
                 end
-            end
-            -- Get New Line
-            line = conn:ReadLine(TcpSocket.EOL.Any)
-        end
+            elseif line:sub(1, 11) == "@GSW,0,0,1," then
+                local inp = string.match(line, "@GSW,0,0,1,(%d+)")
+                local output_table = {}
+                for d in line:gmatch("%d+") do
+                    table.insert(output_table, d)
+                end
+                for i = 1, 4 do
+                    table.remove(output_table, 1)
+                end
+                for i, v in ipairs(output_table) do
+                    matrix_feedback(inp, v)
+                end
             end
             -- Get New Line
             line = conn:ReadLine(TcpSocket.EOL.Any)
