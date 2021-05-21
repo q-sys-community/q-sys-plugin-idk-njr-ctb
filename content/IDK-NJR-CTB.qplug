@@ -49,6 +49,11 @@ function GetProperties()
             Min = 1,
             Max = 32,
             Value = 2
+        },
+        {
+            Name = "Unlink Audio Routing",
+            Type = "boolean",
+            Value = false
         }
     }
     return props
@@ -81,7 +86,7 @@ function GetControls(props)
             Name = "IPAddress",
             ControlType = "Indicator",
             IndicatorType = "Text",
-            PinStyle = "Both",
+            PinStyle = "Output",
             Count = 1,
             UserPin = true
         },
@@ -105,6 +110,50 @@ function GetControls(props)
                 UserPin = true
             }
         )
+    end
+    if props["Unlink Audio Routing"].Value == true then
+        for i = 1, props["Output Count"].Value do
+            table.insert(
+                ctls,
+                {
+                    Name = "audio_output_" .. i,
+                    ControlType = "Text",
+                    PinStyle = "Both",
+                    UserPin = true
+                }
+            )
+            table.insert(
+                ctls,
+                {
+                    Name = "video_output_" .. i,
+                    ControlType = "Text",
+                    PinStyle = "Both",
+                    UserPin = true
+                }
+            )
+            for s = 1, props["Input Count"].Value do
+                table.insert(
+                    ctls,
+                    {
+                        Name = "audio_input_" .. s .. "-output_" .. i,
+                        ControlType = "Button",
+                        ButtonType = "Toggle",
+                        PinStyle = "Both",
+                        UserPin = true
+                    }
+                )
+                table.insert(
+                    ctls,
+                    {
+                        Name = "video_input_" .. s .. "-output_" .. i,
+                        ControlType = "Button",
+                        ButtonType = "Toggle",
+                        PinStyle = "Both",
+                        UserPin = true
+                    }
+                )
+            end
+        end
     end
     for i = 1, props["Output Count"].Value do
         table.insert(
@@ -139,22 +188,38 @@ function GetControls(props)
             )
         end
     end
+
     return ctls
 end
 
--- Variable holding Page Names for ease
-local pagenames = {"Display"}
+local pagenames = {
+    "Matrix",
+    "AV Matrix",
+    "Video Matrix",
+    "Audio Matrix"
+}
 
 -- This function allows you to populate pages in your plugin.
 function GetPages(props)
     pages = {}
-    table.insert(pages, {name = pagenames[1]})
+    if props["Unlink Audio Routing"].Value == false then
+        table.insert(pages, {name = pagenames[1]})
+    else
+        table.insert(pages, {name = pagenames[2]})
+        table.insert(pages, {name = pagenames[3]})
+        table.insert(pages, {name = pagenames[4]})
+    end
     return pages
 end
 
 -- This function allows you to layout pages in your plugin.
 function GetControlLayout(props)
     local layout = {}
+
+    local current_page = pagenames[props["page_index"].Value]
+    if props["Unlink Audio Routing"].Value then
+        current_page = pagenames[props["page_index"].Value + 1]
+    end
 
     input_count = props["Input Count"].Value
     output_count = props["Output Count"].Value
@@ -222,10 +287,13 @@ function GetControlLayout(props)
             Color = Colors.Black,
             Position = {0, title_size[2] + (2.5 * btn_size[2])},
             Size = {3 * btn_size[1], btn_size[2]}
-        },
+        }
+    }
+    table.insert(
+        graphics,
         {
             Type = "GroupBox",
-            Text = "Matrix",
+            Text = current_page,
             HTextAlign = "Left",
             Fill = Colors.White,
             CornerRadius = 8,
@@ -234,7 +302,107 @@ function GetControlLayout(props)
             StrokeWidth = 1,
             Position = matrix_groupbox_position,
             Size = matrix_groupbox_size
-        },
+        }
+    )
+    if current_page == "Matrix" or current_page == "AV Matrix" then
+        for i = 1, output_count do -- For each output
+            layout["output_" .. i] = {
+                PrettyName = "Output " .. i .. "~Select",
+                Style = "Indicator",
+                Color = {255, 255, 255},
+                Position = {btn_size[1] + (i * btn_size[1]), matrix_groupbox_position[2] + (2.5 * btn_size[2])},
+                Size = btn_size
+            }
+            --[[layout["video_mute_" .. i] = {
+                PrettyName = "Video Mute~Video Mute " .. i,
+                Style = "Button",
+                Legend = "Mute",
+                Color = {255, 0, 0},
+                Position = {btn_size[1] + (i * btn_size[1]), matrix_groupbox_position[2] + (0.5 * btn_size[2])},
+                Size = btn_size
+            }]]
+            for s = 1, input_count do -- For each input
+                layout["input_" .. s .. "-output_" .. i] = {
+                    PrettyName = "Output " .. i .. "~In" .. s .. " -> Out" .. i,
+                    Style = "Button",
+                    Legend = tostring(s),
+                    Position = {
+                        btn_size[1] + (i * btn_size[1]),
+                        matrix_groupbox_position[2] + (2.5 * btn_size[2]) + (s * btn_size[2])
+                    },
+                    Size = btn_size
+                }
+            end
+        end
+    elseif current_page == "Video Matrix" then
+        for i = 1, output_count do -- For each output
+            layout["video_output_" .. i] = {
+                PrettyName = "Output " .. i .. "~Video Select",
+                Style = "Indicator",
+                Color = {255, 255, 255},
+                Position = {btn_size[1] + (i * btn_size[1]), matrix_groupbox_position[2] + (2.5 * btn_size[2])},
+                Size = btn_size
+            }
+            --[[layout["video_mute_" .. i] = {
+                PrettyName = "Video Mute~Video Mute " .. i,
+                Style = "Button",
+                Legend = "Mute",
+                Color = {255, 0, 0},
+                Position = {btn_size[1] + (i * btn_size[1]), matrix_groupbox_position[2] + (0.5 * btn_size[2])},
+                Size = btn_size
+            }]]
+            for s = 1, input_count do -- For each input
+                layout["video_input_" .. s .. "-output_" .. i] = {
+                    PrettyName = "Output " .. i .. "~Video In" .. s .. " -> Out" .. i,
+                    Style = "Button",
+                    Color = Colors.Red,
+                    UnlinkOffColor = true,
+                    OffColor = {124, 124, 124},
+                    Legend = tostring(s),
+                    Position = {
+                        btn_size[1] + (i * btn_size[1]),
+                        matrix_groupbox_position[2] + (2.5 * btn_size[2]) + (s * btn_size[2])
+                    },
+                    Size = btn_size
+                }
+            end
+        end
+    elseif current_page == "Audio Matrix" then
+        for i = 1, output_count do -- For each output
+            layout["audio_output_" .. i] = {
+                PrettyName = "Output " .. i .. "~Audio Select",
+                Style = "Indicator",
+                Color = {255, 255, 255},
+                Position = {btn_size[1] + (i * btn_size[1]), matrix_groupbox_position[2] + (2.5 * btn_size[2])},
+                Size = btn_size
+            }
+            --[[layout["video_mute_" .. i] = {
+                PrettyName = "Video Mute~Video Mute " .. i,
+                Style = "Button",
+                Legend = "Mute",
+                Color = {255, 0, 0},
+                Position = {btn_size[1] + (i * btn_size[1]), matrix_groupbox_position[2] + (0.5 * btn_size[2])},
+                Size = btn_size
+            }]]
+            for s = 1, input_count do -- For each input
+                layout["audio_input_" .. s .. "-output_" .. i] = {
+                    PrettyName = "Output " .. i .. "~Audio In" .. s .. " -> Out" .. i,
+                    Style = "Button",
+                    Color = Colors.Green,
+                    UnlinkOffColor = true,
+                    OffColor = {124, 124, 124},
+                    Legend = tostring(s),
+                    Position = {
+                        btn_size[1] + (i * btn_size[1]),
+                        matrix_groupbox_position[2] + (2.5 * btn_size[2]) + (s * btn_size[2])
+                    },
+                    Size = btn_size
+                }
+            end
+        end
+    end
+    table.insert(
+        graphics,
         {
             Type = "Text",
             Text = "Signal",
@@ -242,7 +410,7 @@ function GetControlLayout(props)
             Position = {matrix_groupbox_position[1], (matrix_groupbox_position[2] + (2.5 * btn_size[2]))},
             Size = btn_size
         }
-    }
+    )
     for i = 1, input_count do
         table.insert(
             graphics,
@@ -289,35 +457,7 @@ function GetControlLayout(props)
         Size = {3 * btn_size[1], btn_size[2]}
     }
     -- Matrix crosspoints
-    for i = 1, output_count do -- For each output
-        layout["output_" .. i] = {
-            PrettyName = "Output " .. i .. "~Select",
-            Style = "Indicator",
-            Color = {255, 255, 255},
-            Position = {btn_size[1] + (i * btn_size[1]), matrix_groupbox_position[2] + (2.5 * btn_size[2])},
-            Size = btn_size
-        }
-        --[[layout["video_mute_" .. i] = {
-            PrettyName = "Video Mute~Video Mute " .. i,
-            Style = "Button",
-            Legend = "Mute",
-            Color = {255, 0, 0},
-            Position = {btn_size[1] + (i * btn_size[1]), matrix_groupbox_position[2] + (0.5 * btn_size[2])},
-            Size = btn_size
-        }]]
-        for s = 1, input_count do -- For each input
-            layout["input_" .. s .. "-output_" .. i] = {
-                PrettyName = "Output " .. i .. "~In" .. s .. " -> Out" .. i,
-                Style = "Button",
-                Legend = tostring(s),
-                Position = {
-                    btn_size[1] + (i * btn_size[1]),
-                    matrix_groupbox_position[2] + (2.5 * btn_size[2]) + (s * btn_size[2])
-                },
-                Size = btn_size
-            }
-        end
-    end
+
     for i = 1, input_count do
         layout["source_signal_" .. i] = {
             PrettyName = string.format("Signal Presence~Source %02i", i),
