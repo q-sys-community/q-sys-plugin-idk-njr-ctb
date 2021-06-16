@@ -532,18 +532,67 @@ if Controls then
         end
     end
 
-    function matrix_feedback(inp, outp)
-        Controls["output_" .. outp].String = inp
-        for i = 1, input_count do
-            Controls["input_" .. i .. "-output_" .. outp].Boolean = false
-        end
-        if inp ~= "0" then
-            Controls["input_" .. inp .. "-output_" .. outp].Boolean = true
+    function matrix_feedback(inp, outp, type)
+        if Properties["Unlink Audio Routing"].Value then
+            print("unlinked feedback, type " .. type)
+            if type == "V" then
+                print("type V")
+                Controls["video_output_" .. outp].String = inp
+                for i = 1, input_count do
+                    Controls["video_input_" .. i .. "-output_" .. outp].Boolean = false
+                end
+                if inp ~= "0" then
+                    Controls["video_input_" .. inp .. "-output_" .. outp].Boolean = true
+                end
+            elseif type == "A" then
+                print("type A")
+                Controls["audio_output_" .. outp].String = inp
+                for i = 1, input_count do
+                    Controls["audio_input_" .. i .. "-output_" .. outp].Boolean = false
+                end
+                if inp ~= "0" then
+                    Controls["audio_input_" .. inp .. "-output_" .. outp].Boolean = true
+                end
+            else
+                print("type else (av)")
+                Controls["output_" .. outp].String = inp
+                Controls["video_output_" .. outp].String = inp
+                Controls["audio_output_" .. outp].String = inp
+                for i = 1, input_count do
+                    Controls["input_" .. i .. "-output_" .. outp].Boolean = false
+                    Controls["video_input_" .. i .. "-output_" .. outp].Boolean = false
+                    Controls["audio_input_" .. i .. "-output_" .. outp].Boolean = false
+                end
+                if inp ~= "0" then
+                    Controls["input_" .. inp .. "-output_" .. outp].Boolean = true
+                    Controls["video_input_" .. inp .. "-output_" .. outp].Boolean = true
+                    Controls["audio_input_" .. inp .. "-output_" .. outp].Boolean = true
+                end
+            end
+            if type ~= "W" and Controls["video_output_" .. outp].String == Controls["audio_output_" .. outp].String then
+                print("second block go! matchup")
+                Controls["output_" .. outp].String = inp
+                Controls["input_" .. inp .. "-output_" .. outp].Boolean = true
+            end
+        else
+            Controls["output_" .. outp].String = inp
+            for i = 1, input_count do
+                Controls["input_" .. i .. "-output_" .. outp].Boolean = false
+            end
+            if inp ~= "0" then
+                Controls["input_" .. inp .. "-output_" .. outp].Boolean = true
+            end
         end
     end
 
-    function tie_command(inp, outp)
-        fnSend("SSW,0,0,1," .. inp .. "," .. outp)
+    function tie_command(inp, outp, type)
+        if type == "V" then
+            fnSend("SSV,0,0,1," .. inp .. "," .. outp)
+        elseif type == "A" then
+            fnSend("SSA,0,0,1," .. inp .. "," .. outp)
+        else
+            fnSend("SSW,0,0,1," .. inp .. "," .. outp)
+        end
     end
 
     -- Setup Utility Callbacks as required
@@ -616,10 +665,20 @@ if Controls then
                 print(inp, outp)
                 if outp == 0 then
                     for i = 1, output_count do
-                        matrix_feedback(inp, i)
+                        matrix_feedback(inp, i, "V")
                     end
                 else
-                    matrix_feedback(inp, outp)
+                    matrix_feedback(inp, outp, "V")
+                end
+            elseif line:sub(1, 5) == "@GSAC" then
+                local outp, inp = string.match(line:sub(3, -1), "AC,0,0,1,(%d+),(%d+)")
+                print(inp, outp)
+                if outp == 0 then
+                    for i = 1, output_count do
+                        matrix_feedback(inp, i, "A")
+                    end
+                else
+                    matrix_feedback(inp, outp, "A")
                 end
             elseif line:sub(1, 6) == "@GSS,1" then
                 local channel, mode, status = string.match(line, "@GSS,1,(%d+),1,(%d+),(%w+)")
@@ -628,6 +687,8 @@ if Controls then
                     Controls["source_signal_" .. channel].Boolean = status ~= "N"
                 end
             elseif line:sub(1, 11) == "@GSW,0,0,1," then
+                local t = line:sub(4, 4)
+                print("type: " .. t)
                 local inp = string.match(line, "@GSW,0,0,1,(%d+)")
                 local output_table = {}
                 for d in line:gmatch("%d+") do
@@ -637,8 +698,36 @@ if Controls then
                     table.remove(output_table, 1)
                 end
                 for i, v in ipairs(output_table) do
-                    matrix_feedback(inp, v)
+                    matrix_feedback(inp, v, t)
                 end
+            --[[elseif line:sub(1, 12) == "@GSVC,0,0,1," then
+                local t = line:sub(4, 4)
+                print("type: " .. t)
+                local inp = string.match(line, "@GSVC,0,0,1,(%d+)")
+                local output_table = {}
+                for d in line:gmatch("%d+") do
+                    table.insert(output_table, d)
+                end
+                for i = 1, 4 do
+                    table.remove(output_table, 1)
+                end
+                for i, v in ipairs(output_table) do
+                    matrix_feedback(inp, v, t)
+                end
+            elseif line:sub(1, 12) == "@GSAC,0,0,1," then
+                local t = line:sub(4, 4)
+                print("type: " .. t)
+                local inp = string.match(line, "@GSAC,0,0,1,(%d+)")
+                local output_table = {}
+                for d in line:gmatch("%d+") do
+                    table.insert(output_table, d)
+                end
+                for i = 1, 4 do
+                    table.remove(output_table, 1)
+                end
+                for i, v in ipairs(output_table) do
+                    matrix_feedback(inp, v, t)
+                end]]
             end
             -- Get New Line
             line = conn:ReadLine(TcpSocket.EOL.Any)

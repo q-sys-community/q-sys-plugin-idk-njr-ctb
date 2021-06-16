@@ -2,4 +2,8 @@
 
 Plugin for IDK CTB-NJR
 
-Tested matrix control and metadata extraction.
+## Features
+
+- Get firmware version
+- Get signal presence
+- AV routing control
